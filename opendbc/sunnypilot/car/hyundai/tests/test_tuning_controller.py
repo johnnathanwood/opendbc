@@ -10,7 +10,9 @@ import numpy as np
 from dataclasses import dataclass, field
 
 from opendbc.car import structs
+from opendbc.car.hyundai.values import CAR
 from opendbc.sunnypilot.car.hyundai.longitudinal.controller import LongitudinalController
+from opendbc.sunnypilot.car.hyundai.longitudinal.helpers import get_car_config
 from opendbc.sunnypilot.car.hyundai.values import HyundaiFlagsSP
 
 LongCtrlState = structs.CarControl.Actuators.LongControlState
@@ -162,6 +164,15 @@ class TestLongitudinalTuningController(unittest.TestCase):
       expected = float(np.interp(accel, stock_accels_list, stock_comfort_band_vals))
       self.assertEqual(actual, expected)
       self.assertEqual(self.controller.comfort_band_lower, 0.0)
+
+  def test_kona_2022_specific_config(self):
+    cfg = get_car_config(CP(carFingerprint=CAR.HYUNDAI_KONA_2022))
+    # snappier acceleration: shorter upper lookahead than the generic default
+    self.assertEqual(cfg.lookahead_jerk_upper_v, [0.25, 0.35, 0.45])
+    # braking jerk + safety-relevant params left at default
+    self.assertEqual(cfg.lookahead_jerk_lower_v, [0.3, 0.45, 0.6])
+    self.assertEqual(cfg.jerk_limits, 4.0)
+    self.assertEqual(cfg.v_ego_stopping, 0.3)
 
   def test_update(self):
     self.CC.actuators.accel = 2.0
