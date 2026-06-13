@@ -129,17 +129,19 @@ class TestLongitudinalTuningController(unittest.TestCase):
   def test_calc_accel(self):
     self.CP_SP.flags = 0
     self.controller.accel_cmd = 1.5
-    self.controller.calculate_accel(self.CC)
+    self.controller.calculate_accel(self.CC, self.CS)
     self.assertEqual(self.controller.desired_accel, self.controller.accel_cmd)
 
     self.CP_SP.flags = HyundaiFlagsSP.LONG_TUNING_DYNAMIC
     self.CC.longActive = False
-    self.controller.calculate_accel(self.CC)
+    self.controller.calculate_accel(self.CC, self.CS)
     self.assertEqual(self.controller.desired_accel, 0.0)
 
+    # stopped, not commanding gas, KIA_NIRO_EV (stop_hold_margin=0) -> hold gate engages, commands 0
     self.CC.longActive = True
-    self.controller.stopping = True
-    self.controller.calculate_accel(self.CC)
+    self.controller.accel_cmd = 0.0
+    self.CS.out.vEgo = 0.0
+    self.controller.calculate_accel(self.CC, self.CS)
     self.assertEqual(self.controller.desired_accel, 0.0)
 
   def test_calc_comfort_band(self):
@@ -175,7 +177,7 @@ class TestLongitudinalTuningController(unittest.TestCase):
     self.assertEqual(cfg.jerk_limits, 4.0)
     self.assertEqual(cfg.v_ego_stopping, 0.3)
     # launch + hill-hold knobs
-    self.assertEqual(cfg.upper_jerk_speed_v, [3.0, 3.5, 2.0])
+    self.assertEqual(cfg.upper_jerk_speed_v, [2.5, 3.0, 2.0])
     self.assertEqual(cfg.stop_hold_margin, 0.3)
 
   def test_launch_jerk_ceiling(self):
@@ -183,28 +185,40 @@ class TestLongitudinalTuningController(unittest.TestCase):
     kona = LongitudinalController(CP(carFingerprint=CAR.HYUNDAI_KONA_2022), self.CP_SP)
     upper_kona, _ = kona._calculate_speed_based_jerk_limits(0.0, LongCtrlState.pid)
     upper_def, _ = self.controller._calculate_speed_based_jerk_limits(0.0, LongCtrlState.pid)
-    self.assertAlmostEqual(upper_kona, 3.0, delta=0.01)
+    self.assertAlmostEqual(upper_kona, 2.5, delta=0.01)
     self.assertAlmostEqual(upper_def, 2.0, delta=0.01)
 
   def test_hill_hold_standstill(self):
     cp_sp = CP(flags=HyundaiFlagsSP.LONG_TUNING_PREDICTIVE)
     kona = LongitudinalController(CP(carFingerprint=CAR.HYUNDAI_KONA_2022), cp_sp)
-    kona.stopping = True
     cc = CC(longActive=True)
-    # +5.8 deg uphill -> command a holding decel (not 0) so it won't roll back
+    cs = CS()
+    # stopped on +5.8 deg uphill, NOT commanding gas -> holding decel (no rollback)
+    cs.out.vEgo = 0.0
+    kona.accel_cmd = 0.0
     cc.orientationNED = [0.0, 0.1012, 0.0]
-    kona.calculate_accel(cc)
+    kona.calculate_accel(cc, cs)
     self.assertLess(kona.desired_accel, -0.5)
     self.assertGreaterEqual(kona.desired_accel, -2.0)
-    # flat ground -> still 0 (no regression vs upstream)
+    # planner commands gas (resume) -> hold releases IMMEDIATELY, follows command (no deadlock)
+    kona.accel_cmd = 1.5
+    kona.calculate_accel(cc, cs)
+    self.assertAlmostEqual(kona.desired_accel, 1.5, delta=0.01)
+    # moving (vEgo>0.4) -> hold off, normal
+    kona.accel_cmd = 0.0
+    cs.out.vEgo = 1.0
+    kona.calculate_accel(cc, cs)
+    self.assertEqual(kona.desired_accel, 0.0)
+    # flat ground, stopped, no gas -> 0 (no regression vs upstream)
+    cs.out.vEgo = 0.0
     cc.orientationNED = [0.0, 0.0, 0.0]
-    kona.calculate_accel(cc)
+    kona.calculate_accel(cc, cs)
     self.assertEqual(kona.desired_accel, 0.0)
     # a car without the hold margin (default 0) stays at 0 even on the grade
     other = LongitudinalController(self.CP, cp_sp)  # KIA_NIRO_EV, stop_hold_margin=0
-    other.stopping = True
+    other.accel_cmd = 0.0
     cc.orientationNED = [0.0, 0.1012, 0.0]
-    other.calculate_accel(cc)
+    other.calculate_accel(cc, cs)
     self.assertEqual(other.desired_accel, 0.0)
 
   def test_update(self):
