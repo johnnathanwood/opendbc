@@ -35,6 +35,7 @@ class Actuators:
 class CC:
   actuators: Actuators = field(default_factory=lambda: Actuators())
   longActive: bool = True
+  orientationNED: list = field(default_factory=lambda: [0.0, 0.0, 0.0])
 
 
 @dataclass
@@ -173,6 +174,38 @@ class TestLongitudinalTuningController(unittest.TestCase):
     self.assertEqual(cfg.lookahead_jerk_lower_v, [0.3, 0.45, 0.6])
     self.assertEqual(cfg.jerk_limits, 4.0)
     self.assertEqual(cfg.v_ego_stopping, 0.3)
+    # launch + hill-hold knobs
+    self.assertEqual(cfg.upper_jerk_speed_v, [3.0, 3.5, 2.0])
+    self.assertEqual(cfg.stop_hold_margin, 0.3)
+
+  def test_launch_jerk_ceiling(self):
+    # Kona raises the low-speed UPPER jerk ceiling for a snappier launch onset
+    kona = LongitudinalController(CP(carFingerprint=CAR.HYUNDAI_KONA_2022), self.CP_SP)
+    upper_kona, _ = kona._calculate_speed_based_jerk_limits(0.0, LongCtrlState.pid)
+    upper_def, _ = self.controller._calculate_speed_based_jerk_limits(0.0, LongCtrlState.pid)
+    self.assertAlmostEqual(upper_kona, 3.0, delta=0.01)
+    self.assertAlmostEqual(upper_def, 2.0, delta=0.01)
+
+  def test_hill_hold_standstill(self):
+    cp_sp = CP(flags=HyundaiFlagsSP.LONG_TUNING_PREDICTIVE)
+    kona = LongitudinalController(CP(carFingerprint=CAR.HYUNDAI_KONA_2022), cp_sp)
+    kona.stopping = True
+    cc = CC(longActive=True)
+    # +5.8 deg uphill -> command a holding decel (not 0) so it won't roll back
+    cc.orientationNED = [0.0, 0.1012, 0.0]
+    kona.calculate_accel(cc)
+    self.assertLess(kona.desired_accel, -0.5)
+    self.assertGreaterEqual(kona.desired_accel, -2.0)
+    # flat ground -> still 0 (no regression vs upstream)
+    cc.orientationNED = [0.0, 0.0, 0.0]
+    kona.calculate_accel(cc)
+    self.assertEqual(kona.desired_accel, 0.0)
+    # a car without the hold margin (default 0) stays at 0 even on the grade
+    other = LongitudinalController(self.CP, cp_sp)  # KIA_NIRO_EV, stop_hold_margin=0
+    other.stopping = True
+    cc.orientationNED = [0.0, 0.1012, 0.0]
+    other.calculate_accel(cc)
+    self.assertEqual(other.desired_accel, 0.0)
 
   def test_update(self):
     self.CC.actuators.accel = 2.0
