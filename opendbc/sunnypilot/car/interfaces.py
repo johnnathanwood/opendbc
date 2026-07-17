@@ -15,7 +15,7 @@ from opendbc.car.hyundai.values import HyundaiFlags
 from opendbc.car.subaru.values import SubaruFlags
 from opendbc.car.toyota.values import ToyotaSafetyFlags
 from opendbc.sunnypilot.car.hyundai.enable_radar_tracks import enable_radar_tracks as hyundai_enable_radar_tracks
-from opendbc.sunnypilot.car.hyundai.longitudinal.helpers import LongitudinalTuningType
+from opendbc.sunnypilot.car.hyundai.longitudinal.helpers import LongitudinalTuningType, RadarType
 from opendbc.sunnypilot.car.hyundai.values import HyundaiFlagsSP
 from opendbc.sunnypilot.car.subaru.values_ext import SubaruFlagsSP, SubaruSafetyFlagsSP
 from opendbc.sunnypilot.car.tesla.values import TeslaFlagsSP
@@ -85,6 +85,7 @@ def setup_interfaces(CI, CP: structs.CarParams, CP_SP: structs.CarParamsSP,
 
   _initialize_custom_longitudinal_tuning(CI, CP, CP_SP, params_dict)
   _initialize_coop_steering(CP, CP_SP, params_dict)
+  _initialize_radar(CI, CP, CP_SP, params_dict)
   _initialize_radar_tracks(CP, CP_SP, can_recv, can_send)
   _initialize_stop_and_go(CP, CP_SP, params_dict)
   _initialize_toyota(CP, CP_SP, params_dict)
@@ -110,6 +111,26 @@ def _initialize_coop_steering(CP: structs.CarParams, CP_SP: structs.CarParamsSP,
     coop_steering = int(params_dict.get("TeslaCoopSteering", 0)) == 1
     if coop_steering:
       CP_SP.flags |= TeslaFlagsSP.COOP_STEERING.value
+
+
+def _initialize_radar(CI, CP: structs.CarParams, CP_SP: structs.CarParamsSP, params_dict: dict[str, str]) -> None:
+  # Hyundai Radar mode: 0=off (default), 1=lead-only, 2=full radar tracks.
+  # Kona 2022: the HyundaiRadar C++ param isn't compiled into this build, so allow opt-in via a
+  # /data/hyundai_radar_mode file without a recompile.
+  if CP.brand == 'hyundai':
+    hyundai_radar = int(params_dict.get("HyundaiRadar", 0))
+    if not hyundai_radar:
+      try:
+        with open("/data/hyundai_radar_mode") as _rf:
+          hyundai_radar = int(_rf.read().strip() or 0)
+      except (OSError, ValueError):
+        hyundai_radar = 0
+    if hyundai_radar == RadarType.OFF:
+      CP_SP.flags |= HyundaiFlagsSP.RADAR_OFF.value
+    if hyundai_radar == RadarType.LEAD_ONLY:
+      CP_SP.flags |= HyundaiFlagsSP.RADAR_LEAD_ONLY.value
+    if hyundai_radar == RadarType.FULL_RADAR:
+      CP_SP.flags |= HyundaiFlagsSP.RADAR_FULL_RADAR.value
 
 
 def _initialize_radar_tracks(CP: structs.CarParams, CP_SP: structs.CarParamsSP,
