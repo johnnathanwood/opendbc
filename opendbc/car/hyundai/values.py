@@ -149,6 +149,10 @@ class HyundaiFlags(IntFlag):
 
   ALT_LIMITS_2 = 2 ** 26
 
+  MRREVO14F_RADAR = 2 ** 27
+  MRR30_RADAR = 2 ** 28
+  MRR35_RADAR = 2 ** 29
+
 
 @dataclass
 class HyundaiCarDocs(CarDocs):
@@ -169,6 +173,9 @@ class HyundaiPlatformConfig(PlatformConfig):
   def init(self):
     if self.flags & HyundaiFlags.MANDO_RADAR:
       self.dbc_dict = {Bus.pt: "hyundai_can_generated", Bus.radar: 'hyundai_kia_mando_front_radar_generated'}
+
+    if self.flags & HyundaiFlags.MRREVO14F_RADAR:
+      self.dbc_dict = {Bus.pt: "hyundai_can_generated", Bus.radar: 'hyundai_mrrevo14f_radar_generated'}
 
     if self.flags & HyundaiFlags.MIN_STEER_32_MPH:
       self.specs = self.specs.override(minSteerSpeed=32 * CV.MPH_TO_MS)
@@ -283,7 +290,7 @@ class CAR(Platforms):
   HYUNDAI_KONA_2022 = HyundaiPlatformConfig(
     [HyundaiCarDocs("Hyundai Kona 2022-23", car_parts=CarParts.common([CarHarness.hyundai_o]))],
     CarSpecs(mass=1491, wheelbase=2.6, steerRatio=13.42, tireStiffnessFactor=0.385),
-    flags=HyundaiFlags.CAMERA_SCC | HyundaiFlags.ALT_LIMITS_2,
+    flags=HyundaiFlags.CAMERA_SCC | HyundaiFlags.ALT_LIMITS_2 | HyundaiFlags.MRREVO14F_RADAR,
   )
   HYUNDAI_KONA_EV = HyundaiPlatformConfig(
     [HyundaiCarDocs("Hyundai Kona Electric 2018-21", car_parts=CarParts.common([CarHarness.hyundai_g]))],
