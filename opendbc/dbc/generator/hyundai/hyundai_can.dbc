@@ -1673,6 +1673,9 @@ BO_ 683 ESCC: 8 XXX
  SG_ ACC_ObjDist : 33|11@1+ (0.1,0) [0|204.7] "m" ABS,ESC
  SG_ CR_VSM_DecCmd_FCA11 : 56|8@1+ (0.01,0) [0|2.55] "g" ESC
 
+BO_ 1193 BRAKE_LAMP_SP: 8 ESC
+ SG_ BrakeLamp : 62|1@1+ (1.0,0.0) [0.0|1.0] ""  Vector__XXX
+
 CM_ "BO_ E_EMS11: All (plug-in) hybrids use this gas signal: CR_Vcu_AccPedDep_Pos, and all EVs use the Accel_Pedal_Pos signal. See hyundai/values.py for a specific car list";
 CM_ 145 "Contains signal with accelerator pedal press. Used by fuel cell hydrogen-powered (FCEV) cars such as the 2021 Hyundai Nexo.";
 CM_ 512 "Contains signal with gear shifter. Used by fuel cell hydrogen-powered (FCEV) cars such as the 2021 Hyundai Nexo.";
